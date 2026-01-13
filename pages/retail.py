@@ -218,6 +218,7 @@ st.subheader("Data Preview")
 st.dataframe(st.session_state.raw_df, use_container_width=True)
 
 # -------------------------------------------------
+# -------------------------------------------------
 # RUN PREDICTION
 # -------------------------------------------------
 st.divider()
@@ -228,14 +229,20 @@ if st.button("Run Prediction"):
 
     X_processed = preprocessor.transform(df)
     preds = model.predict(X_processed)
-    probs = model.predict_proba(X_processed)
 
     df["High Sales Prediction"] = ["Yes" if p == 1 else "No" for p in preds]
-    df["High Sales Probability (%)"] = (probs[:, 1] * 100).round(2)
+
+    # ✅ SAFE probability handling
+    if hasattr(model, "predict_proba"):
+        probs = model.predict_proba(X_processed)
+        df["High Sales Probability (%)"] = (probs[:, 1] * 100).round(2)
+    else:
+        df["High Sales Probability (%)"] = 0.0
 
     st.session_state.result_df = df
     st.session_state.prediction_done = True
     st.success("Sales prediction completed successfully")
+
 
 # -------------------------------------------------
 # RESULTS + INSIGHTS

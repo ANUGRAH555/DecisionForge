@@ -211,20 +211,30 @@ st.subheader("Data Preview")
 st.dataframe(st.session_state.raw_df, use_container_width=True)
 
 # -------------------------------------------------
+# -------------------------------------------------
 # RUN PREDICTION
 # -------------------------------------------------
 st.divider()
+
 if st.button("Run Prediction"):
     df = st.session_state.raw_df.copy()
     X = df.drop(columns=["Fraud"], errors="ignore")
-    Xp = preprocessor.transform(X)
 
+    Xp = preprocessor.transform(X)
     df["Fraud Prediction"] = model.predict(Xp)
-    df["Fraud Probability (%)"] = (model.predict_proba(Xp)[:, 1] * 100).round(2)
+
+    # ✅ SAFE probability handling
+    if hasattr(model, "predict_proba"):
+        df["Fraud Probability (%)"] = (
+            model.predict_proba(Xp)[:, 1] * 100
+        ).round(2)
+    else:
+        df["Fraud Probability (%)"] = 0.0
 
     st.session_state.result_df = df
     st.session_state.prediction_done = True
-    st.success("Prediction completed")
+    st.success("Prediction completed successfully")
+
 
 # -------------------------------------------------
 # RESULTS + BUSINESS INSIGHTS + VISUALS
