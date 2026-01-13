@@ -8,10 +8,13 @@ import seaborn as sns
 # -------------------------------------------------
 # PAGE CONFIG
 # -------------------------------------------------
-st.set_page_config(page_title="Insurance Risk & Claims Analytics", layout="wide")
+st.set_page_config(
+    page_title="Insurance Risk & Claims Analytics",
+    layout="wide"
+)
 
 # -------------------------------------------------
-# DARK ML THEME (MATCHES HR PAGE)
+# DARK ML THEME + RETAIL STYLE BUTTONS
 # -------------------------------------------------
 st.markdown("""
 <style>
@@ -30,7 +33,7 @@ st.markdown("""
     padding: 1.6rem 2.2rem;
 }
 
-/* RADIO / FORMS / UPLOAD */
+/* RADIO / FORM / UPLOAD */
 section[data-testid="stRadio"],
 section[data-testid="stFileUploader"],
 div[data-testid="stForm"] {
@@ -50,7 +53,7 @@ section[data-testid="stRadio"] span {
     color: #cbd5f5 !important;
 }
 
-/* ALL BUTTONS */
+/* BUTTONS – SAME AS RETAIL */
 .stButton > button,
 .stDownloadButton > button {
     background: linear-gradient(135deg, #0284c7, #0ea5e9);
@@ -60,11 +63,14 @@ section[data-testid="stRadio"] span {
     padding: 0.65rem 1.6rem;
     border: none;
     box-shadow: 0 10px 28px rgba(14,165,233,0.45);
+    transition: all 0.25s ease;
 }
+
 .stButton > button:hover,
 .stDownloadButton > button:hover {
     background: linear-gradient(135deg, #0369a1, #0284c7);
     transform: translateY(-2px);
+    box-shadow: 0 14px 34px rgba(14,165,233,0.6);
 }
 
 /* FILE UPLOAD BUTTON */
@@ -73,6 +79,8 @@ button[data-testid="stBaseButton-secondary"] {
     color: #020617 !important;
     font-weight: 800;
     border-radius: 12px;
+    padding: 0.6rem 1.4rem;
+    border: none;
 }
 
 /* DATAFRAME */
@@ -82,7 +90,7 @@ button[data-testid="stBaseButton-secondary"] {
     overflow: hidden;
 }
 
-/* HEADINGS */
+/* HEADERS */
 h1, h2, h3 { color: #e5e7eb; }
 
 /* DIVIDER */
@@ -90,7 +98,9 @@ hr { border: 1px dashed rgba(56,189,248,0.45); }
 
 /* SELECT CURSOR */
 div[data-baseweb="select"],
-div[data-baseweb="menu"] * { cursor: pointer !important; }
+div[data-baseweb="menu"] * {
+    cursor: pointer !important;
+}
 
 </style>
 """, unsafe_allow_html=True)
@@ -107,10 +117,9 @@ for k in ["raw_df", "result_df", "prediction_done", "input_method"]:
 # -------------------------------------------------
 @st.cache_resource
 def load_artifacts():
-    return (
-        joblib.load("models/insurance_model.pkl"),
-        joblib.load("models/insurance_preprocessor.pkl")
-    )
+    model = joblib.load("models/insurance_model.pkl")
+    preprocessor = joblib.load("models/insurance_preprocessor.pkl")
+    return model, preprocessor
 
 model, preprocessor = load_artifacts()
 
@@ -138,7 +147,7 @@ if st.session_state.input_method != input_method:
 st.divider()
 
 # -------------------------------------------------
-# SAMPLE DATASET (FIXED SWITCHING)
+# SAMPLE DATASET
 # -------------------------------------------------
 if input_method == "Use Sample Dataset":
     data_folder = "data"
@@ -148,12 +157,10 @@ if input_method == "Use Sample Dataset":
         st.warning("No CSV files found.")
     else:
         selected = st.selectbox("Select dataset:", files)
-
-        # KEY FIX FOR DATASET SWITCHING
-        if st.button("Load Dataset", key=f"load_{selected}"):
+        if st.button("Load Dataset", key=f"insurance_load_{selected}"):
             st.session_state.raw_df = pd.read_csv(os.path.join(data_folder, selected))
             st.session_state.prediction_done = False
-            st.success(f"Loaded: {selected}")
+            st.success(f"Loaded dataset: {selected}")
 
 # -------------------------------------------------
 # MANUAL ENTRY
@@ -211,8 +218,7 @@ st.subheader("Data Preview")
 st.dataframe(st.session_state.raw_df, use_container_width=True)
 
 # -------------------------------------------------
-# -------------------------------------------------
-# RUN PREDICTION
+# RUN PREDICTION (SAFE)
 # -------------------------------------------------
 st.divider()
 
@@ -221,13 +227,16 @@ if st.button("Run Prediction"):
     X = df.drop(columns=["Fraud"], errors="ignore")
 
     Xp = preprocessor.transform(X)
-    df["Fraud Prediction"] = model.predict(Xp)
+    preds = model.predict(Xp)
 
-    # ✅ SAFE probability handling
-    if hasattr(model, "predict_proba"):
-        df["Fraud Probability (%)"] = (
-            model.predict_proba(Xp)[:, 1] * 100
-        ).round(2)
+    df["Fraud Prediction"] = preds
+
+    # 🔒 SAFE probability (no multi_class crash)
+    if hasattr(model, "predict_proba") and Xp.shape[0] > 0:
+        try:
+            df["Fraud Probability (%)"] = (model.predict_proba(Xp)[:, 1] * 100).round(2)
+        except Exception:
+            df["Fraud Probability (%)"] = 0.0
     else:
         df["Fraud Probability (%)"] = 0.0
 
@@ -235,9 +244,8 @@ if st.button("Run Prediction"):
     st.session_state.prediction_done = True
     st.success("Prediction completed successfully")
 
-
 # -------------------------------------------------
-# RESULTS + BUSINESS INSIGHTS + VISUALS
+# RESULTS + INSIGHTS + VISUALS
 # -------------------------------------------------
 if st.session_state.prediction_done:
     df = st.session_state.result_df.copy()
@@ -245,7 +253,7 @@ if st.session_state.prediction_done:
     st.subheader("Prediction Results")
     st.dataframe(df, use_container_width=True)
 
-    # ---------------- BUSINESS INSIGHTS (UNCHANGED)
+    # ---------------- BUSINESS INSIGHTS
     st.divider()
     st.subheader("Insurance Business Insights")
 
@@ -282,7 +290,7 @@ if st.session_state.prediction_done:
         use_container_width=True
     )
 
-    # ---------------- VISUAL INSIGHTS (FIXED SIZE)
+    # ---------------- VISUAL INSIGHTS (2 GRAPHS)
     if input_method != "Manual Entry":
         st.divider()
         st.subheader("Visual Insights")

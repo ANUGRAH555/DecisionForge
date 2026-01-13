@@ -2,38 +2,23 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # -------------------------------------------------
 # PAGE CONFIG
 # -------------------------------------------------
-st.set_page_config(
-    page_title="Retail & E-Commerce Intelligence",
-    layout="wide"
-)
+st.set_page_config(page_title="Retail & E-Commerce Intelligence", layout="wide")
 
 # -------------------------------------------------
-# DARK ML THEME (UI ONLY)
+# DARK ML THEME
 # -------------------------------------------------
 st.markdown("""
 <style>
-
-/* GLOBAL */
-.stApp {
-    background: linear-gradient(180deg, #020617, #020617);
-    color: #e5e7eb;
-}
-
-/* HIDE SIDEBAR */
+.stApp { background: #020617; color: #e5e7eb; }
 [data-testid="stSidebar"] { display: none; }
-
-/* MAIN CONTAINER */
-.block-container {
-    padding: 1.6rem 2.2rem;
-}
-
-/* RADIO / FORM / UPLOAD */
+.block-container { padding: 1.6rem 2.2rem; }
 section[data-testid="stRadio"],
 section[data-testid="stFileUploader"],
 div[data-testid="stForm"] {
@@ -43,61 +28,15 @@ div[data-testid="stForm"] {
     padding: 1.3rem;
     margin-bottom: 1.6rem;
 }
-
-/* RADIO TEXT */
-section[data-testid="stRadio"] label {
-    color: #e5e7eb !important;
-    font-weight: 700;
-}
-section[data-testid="stRadio"] span {
-    color: #cbd5f5 !important;
-}
-
-/* BUTTONS */
 .stButton > button,
 .stDownloadButton > button {
-    background: linear-gradient(135deg, #0284c7, #0ea5e9);
-    color: white !important;
-    font-weight: 800;
-    border-radius: 14px;
-    padding: 0.65rem 1.6rem;
-    border: none;
-    box-shadow: 0 10px 28px rgba(14,165,233,0.45);
+    background: linear-gradient(135deg,#0284c7,#0ea5e9);
+    color:white;font-weight:800;border-radius:14px;
 }
-
-.stButton > button:hover,
-.stDownloadButton > button:hover {
-    background: linear-gradient(135deg, #0369a1, #0284c7);
-    transform: translateY(-2px);
-}
-
-/* FILE UPLOADER BUTTON */
-button[data-testid="stBaseButton-secondary"] {
-    background: linear-gradient(135deg, #14b8a6, #22d3ee);
-    color: #020617 !important;
-    font-weight: 800;
-    border-radius: 12px;
-}
-
-/* DATAFRAME */
 [data-testid="stDataFrame"] {
     border-radius: 16px;
     border: 1px solid rgba(56,189,248,0.45);
-    overflow: hidden;
 }
-
-/* HEADERS */
-h1, h2, h3 { color: #e5e7eb; }
-
-/* DIVIDER */
-hr { border: 1px dashed rgba(56,189,248,0.45); }
-
-/* SELECT CURSOR */
-div[data-baseweb="select"],
-div[data-baseweb="menu"] * {
-    cursor: pointer !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -109,7 +48,7 @@ for k in ["raw_df", "result_df", "prediction_done", "input_method"]:
         st.session_state[k] = None if k != "prediction_done" else False
 
 # -------------------------------------------------
-# LOAD MODEL & PREPROCESSOR
+# LOAD MODEL
 # -------------------------------------------------
 @st.cache_resource
 def load_artifacts():
@@ -121,14 +60,16 @@ def load_artifacts():
 model, preprocessor = load_artifacts()
 
 # -------------------------------------------------
+# UTILS
+# -------------------------------------------------
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# -------------------------------------------------
 # HEADER
 # -------------------------------------------------
 st.title("Retail & E-Commerce Intelligence")
-st.write(
-    "Predict high-performing products using machine learning and "
-    "gain actionable retail business insights."
-)
-
+st.write("Predict high-performing products using machine learning.")
 st.divider()
 
 # -------------------------------------------------
@@ -141,111 +82,93 @@ input_method = st.radio(
 
 if st.session_state.input_method != input_method:
     st.session_state.raw_df = None
-    st.session_state.result_df = None
     st.session_state.prediction_done = False
     st.session_state.input_method = input_method
 
 st.divider()
 
 # -------------------------------------------------
-# SAMPLE DATASET (FIXED SWITCHING)
+# SAMPLE DATA
 # -------------------------------------------------
 if input_method == "Use Sample Dataset":
-    data_folder = "data"
-    files = [f for f in os.listdir(data_folder) if f.endswith(".csv")] if os.path.exists(data_folder) else []
-
-    if not files:
-        st.warning("No datasets found.")
-    else:
-        selected = st.selectbox("Select dataset:", files)
-
-        if st.button("Load Dataset", key=f"retail_load_{selected}"):
-            st.session_state.raw_df = pd.read_csv(os.path.join(data_folder, selected))
-            st.session_state.prediction_done = False
-            st.success(f"Loaded dataset: {selected}")
+    files = [f for f in os.listdir("data") if f.endswith(".csv")]
+    selected = st.selectbox("Select dataset:", files)
+    if st.button("Load Dataset"):
+        st.session_state.raw_df = pd.read_csv(f"data/{selected}")
+        st.session_state.prediction_done = False
+        st.success("Dataset loaded")
 
 # -------------------------------------------------
 # MANUAL ENTRY
 # -------------------------------------------------
 elif input_method == "Manual Entry":
-    with st.form("manual_retail"):
+    with st.form("retail_manual"):
         c1, c2 = st.columns(2)
-
         with c1:
-            category = st.selectbox("Category", ["Electronics", "Clothing", "Grocery", "Home", "Beauty"])
-            region = st.selectbox("Region", ["North", "South", "East", "West"])
-            season = st.selectbox("Season", ["Regular", "Festival", "Off-Season"])
+            category = st.selectbox("Category", ["Electronics","Clothing","Grocery","Home","Beauty"])
+            region = st.selectbox("Region", ["North","South","East","West"])
+            season = st.selectbox("Season", ["Regular","Festival","Off-Season"])
             price = st.number_input("Price", 100, 10000, 2000)
-
         with c2:
-            discount = st.selectbox("Discount (%)", [0, 5, 10, 20, 30])
-            marketing_spend = st.number_input("Marketing Spend", 500, 100000, 10000)
-            units_sold = st.number_input("Units Sold", 1, 1000, 100)
+            discount = st.selectbox("Discount (%)", [0,5,10,20,30])
+            marketing = st.number_input("Marketing Spend", 500, 100000, 10000)
+            units = st.number_input("Units Sold", 1, 1000, 100)
 
         if st.form_submit_button("Add Product"):
-            revenue = price * units_sold * (1 - discount / 100)
+            revenue = price * units * (1 - discount/100)
             st.session_state.raw_df = pd.DataFrame([{
                 "Category": category,
                 "Region": region,
                 "Season": season,
                 "Price": price,
                 "DiscountPercent": discount,
-                "MarketingSpend": marketing_spend,
-                "UnitsSold": units_sold,
+                "MarketingSpend": marketing,
+                "UnitsSold": units,
                 "Revenue": revenue
             }])
             st.session_state.prediction_done = False
-            st.success("Product added successfully")
 
 # -------------------------------------------------
 # CSV UPLOAD
 # -------------------------------------------------
 elif input_method == "Upload CSV":
-    file = st.file_uploader("Upload Retail CSV", type=["csv"])
+    file = st.file_uploader("Upload Retail CSV", type="csv")
     if file:
         st.session_state.raw_df = pd.read_csv(file)
         st.session_state.prediction_done = False
-        st.success("CSV uploaded successfully")
 
 # -------------------------------------------------
 # DATA PREVIEW
 # -------------------------------------------------
 if st.session_state.raw_df is None:
-    st.info("Please load a dataset to continue.")
     st.stop()
 
 st.subheader("Data Preview")
 st.dataframe(st.session_state.raw_df, use_container_width=True)
 
 # -------------------------------------------------
-# -------------------------------------------------
-# RUN PREDICTION
+# RUN PREDICTION (FIXED)
 # -------------------------------------------------
 st.divider()
 st.subheader("Sales Prediction")
 
 if st.button("Run Prediction"):
     df = st.session_state.raw_df.copy()
+    Xp = preprocessor.transform(df)
 
-    X_processed = preprocessor.transform(df)
-    preds = model.predict(X_processed)
+    preds = model.predict(Xp)
+    scores = model.decision_function(Xp)
+    probs = sigmoid(scores)
 
-    df["High Sales Prediction"] = ["Yes" if p == 1 else "No" for p in preds]
-
-    # ✅ SAFE probability handling
-    if hasattr(model, "predict_proba"):
-        probs = model.predict_proba(X_processed)
-        df["High Sales Probability (%)"] = (probs[:, 1] * 100).round(2)
-    else:
-        df["High Sales Probability (%)"] = 0.0
+    df["High Sales Prediction"] = ["Yes" if p==1 else "No" for p in preds]
+    df["High Sales Probability (%)"] = (probs*100).round(2)
 
     st.session_state.result_df = df
     st.session_state.prediction_done = True
-    st.success("Sales prediction completed successfully")
-
+    st.success("Prediction completed")
 
 # -------------------------------------------------
-# RESULTS + INSIGHTS
+# RESULTS + VISUALS
 # -------------------------------------------------
 if st.session_state.prediction_done:
     df = st.session_state.result_df
@@ -253,57 +176,23 @@ if st.session_state.prediction_done:
     st.subheader("Prediction Results")
     st.dataframe(df, use_container_width=True)
 
-    # ---------------- BUSINESS INSIGHTS ----------------
-    st.subheader("📌 Retail Business Insights")
+    st.subheader("Visual Insights")
+    c1, c2 = st.columns(2)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Products", len(df))
-    col2.metric("High Sales %",
-                f"{(df['High Sales Prediction'] == 'Yes').mean()*100:.1f}%")
-    col3.metric(
-        "Avg Revenue (High Sales)",
-        f"{df[df['High Sales Prediction']=='Yes']['Revenue'].mean():,.0f}"
-        if (df['High Sales Prediction']=='Yes').any() else "N/A"
-    )
+    with c1:
+        fig, ax = plt.subplots()
+        sns.scatterplot(data=df, x="Price", y="Revenue",
+                        hue="High Sales Prediction", ax=ax)
+        st.pyplot(fig)
 
-    # ---------------- VISUAL INSIGHTS ----------------
-    if input_method != "Manual Entry":
-        st.divider()
-        st.subheader("Visual Insights")
+    with c2:
+        fig, ax = plt.subplots()
+        sns.boxplot(data=df, x="Category", y="Revenue", ax=ax)
+        st.pyplot(fig)
 
-        c1, c2 = st.columns(2)
-
-        # SCATTER – Price vs Revenue
-        with c1:
-            fig1, ax1 = plt.subplots(figsize=(6,4))
-            sns.scatterplot(
-                data=df,
-                x="Price",
-                y="Revenue",
-                hue="High Sales Prediction",
-                ax=ax1
-            )
-            ax1.set_title("Price vs Revenue")
-            st.pyplot(fig1)
-
-        # BOX – Revenue by Category
-        with c2:
-            fig2, ax2 = plt.subplots(figsize=(6,4))
-            sns.boxplot(
-                data=df,
-                x="Category",
-                y="Revenue",
-                ax=ax2
-            )
-            ax2.set_title("Revenue by Category")
-            st.pyplot(fig2)
-
-    # -------------------------------------------------
-    # DOWNLOAD
-    # -------------------------------------------------
     st.download_button(
-        "⬇️ Download Retail Sales Report (CSV)",
-        df.to_csv(index=False).encode("utf-8"),
-        file_name="retail_sales_prediction_report.csv",
-        mime="text/csv"
+        "⬇️ Download Retail Report",
+        df.to_csv(index=False).encode(),
+        "retail_report.csv",
+        "text/csv"
     )
